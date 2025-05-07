@@ -1,0 +1,109 @@
+- name: Router setup
+  hosts: routers
+  remote_user: admin
+  become: true
+  vars:
+    install_coolify: true
+  tasks:
+    - name: Ping routers
+      ansible.builtin.ping:
+
+    - name: Setup python environment
+      ansible.builtin.apt:
+        name:
+          - python3-full
+          - python3-pip
+        update_cache: true
+
+    - name: Install hyfetch
+      ansible.builtin.pip:
+        name:
+          - hyfetch
+        break_system_packages: true
+
+    - name: Setup network packages
+      ansible.builtin.apt:
+        name:
+          - iptables-persistent
+          - dnsmasq
+
+    - name: Stop NetworkManager
+      ansible.builtin.systemd:
+        name: NetworkManager
+        enabled: false
+        state: stopped
+      
+    - name: Start systemd-networkd
+      ansible.builtin.systemd:
+        name: systemd-networkd
+        enabled: true
+        state: started
+    
+    - name: Add WAN network file
+      ansible.builtin.copy:
+        dest: /etc/systemd/network/10-wan.network
+        content: |
+          [Match]
+          Name=eth0
+
+          [Link]
+          MACAddress=74:93:da:91:a9:c0
+
+          [Network]
+          DHCP=yes
+
+    - name: Add LAN network file
+      ansible.builtin.copy:
+        dest: /etc/systemd/network/20-lan.network
+        content: |
+          [Match]
+          Name=eth1
+
+          [Network]
+          Address=192.168.69.1/24
+          IPForward=yes
+
+    - name: Enable forwarding with sysctl
+      ansible.posix.sysctl:
+        name: net.ipv4.ip_forward
+        value: "1"
+        sysctl_set: true
+    
+    - name: Add iptables rules for NAT
+      ansible.builtin.iptables:
+        table: nat
+        chain: POSTROUTING
+        out_interface: eth0
+        jump: MASQUERADE
+
+    - name: Set up dnsmasq
+      ansible.builtin.copy:
+        dest: /etc/dnsmasq.conf
+        content: |
+          interface=eth1
+          bind-interfaces
+          domain-needed
+          bogus-priv
+          dhcp-range=192.168.69.2,192.168.69.255,12h
+          dhcp-option=3,192.168.69.1
+          dhcp-option=6,192.168.69.1
+
+    - name: Enable dnsmasq
+      ansible.builtin.systemd:
+        name: dnsmasq
+        enabled: true
+        state: started
+
+    - name: Install coolify
+      ansible.builtin.shell:
+        cmd: curl -fsSL https://cdn.coollabs.io/coolify/install.sh | sudo bash
+      when: install_coolify
+
+    - name: Set forward policy
+      ansible.builtin.iptables:
+        chain: FORWARD
+        policy: ACCEPT
+    
+    - name: Persist iptables rules
+      ansible.builtin.shell:
+        cmd: sudo iptables-save | sudo tee /etc/iptables/rules.v4
