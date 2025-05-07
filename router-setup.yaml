@@ -107,3 +107,10 @@
     - name: Persist iptables rules
       ansible.builtin.shell:
         cmd: sudo iptables-save | sudo tee /etc/iptables/rules.v4
+
+    - name: Set nameservers
+      ansible.builtin.copy:
+        dest: /etc/resolv.conf
+        content: |
+          nameserver 1.1.1.1
+          nameserver 8.8.8.8
