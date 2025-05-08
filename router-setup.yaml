@@ -94,11 +94,6 @@
         enabled: true
         state: started
 
-    - name: Install coolify
-      ansible.builtin.shell:
-        cmd: curl -fsSL https://cdn.coollabs.io/coolify/install.sh | sudo bash
-      when: install_coolify
-
     - name: Set forward policy
       ansible.builtin.iptables:
         chain: FORWARD
